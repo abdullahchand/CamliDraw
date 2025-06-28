@@ -8,6 +8,7 @@ import { useRef as useReactRef } from 'react';
 
 interface CameraViewProps {
   onGestureDetected: (gesture: GestureState) => void;
+  onHandPositionUpdate?: (position: { x: number; y: number } | null) => void;
 }
 
 function mapVisualGestureToAppGesture(gesture: any): GestureState {
@@ -64,22 +65,63 @@ function waitForVideoReady(video: HTMLVideoElement): Promise<void> {
   });
 }
 
-export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected }) => {
+export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHandPositionUpdate }) => {
   const { videoRef, isLoading, error } = useCamera();
   const canvasRef = useReactRef<HTMLCanvasElement>(null);
+  // Store refs for callbacks so they are always up to date
+  const gestureCallbackRef = useRef(onGestureDetected);
+  const handPositionCallbackRef = useRef(onHandPositionUpdate);
+  gestureCallbackRef.current = onGestureDetected;
+  handPositionCallbackRef.current = onHandPositionUpdate;
 
+  // --- Only run MediaPipe/camera setup ONCE ---
   useEffect(() => {
-    console.log('CameraView effect running', { videoRef: videoRef.current, isLoading });
-    if (isLoading) {
-      console.log('Effect exiting early (isLoading)', { isLoading });
-      return;
-    }
-    if (!videoRef.current) {
-      console.log('Effect exiting early (no videoRef.current)', { videoRef: videoRef.current });
-      return;
-    }
-
+    if (isLoading || !videoRef.current) return;
     let running = true;
+    let lastGesture: GestureState = { type: 'none', confidence: 0, position: { x: 0, y: 0 } };
+    const latestLandmarksRef = { current: null as any[] | null };
+    let lastPinchPosition: { x: number; y: number } | null = null;
+
+    function detectGesture(landmarks: any[]): GestureState {
+      if (!landmarks || landmarks.length !== 21) {
+        return { type: 'none', confidence: 0, position: { x: 0, y: 0 } };
+      }
+      // Helper functions
+      const calculateDistance = (a: any, b: any) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+      const getTip = (f: number) => landmarks[[4,8,12,16,20][f]];
+      const getPip = (f: number) => landmarks[[3,6,10,14,18][f]];
+      const getMcp = (f: number) => landmarks[[2,5,9,13,17][f]];
+      const isExtended = (f: number) => {
+        const tip = getTip(f), pip = getPip(f), mcp = getMcp(f);
+        if (f === 0) return Math.abs(tip.x - mcp.x) > Math.abs(pip.x - mcp.x) + 0.02;
+        return mcp.y - tip.y > mcp.y - pip.y + 0.02;
+      };
+      const extended = [0,1,2,3,4].filter(isExtended);
+      const thumbTip = getTip(0), indexTip = getTip(1), middleTip = getTip(2);
+      const thumbIndexDist = calculateDistance(thumbTip, indexTip);
+      const thumbMiddleDist = calculateDistance(thumbTip, middleTip);
+      // Pinch
+      if (thumbIndexDist < 0.06 && extended.length <= 1) {
+        return { type: 'pinch', confidence: Math.max(0.5, 1 - thumbIndexDist * 15), position: { x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2 } };
+      }
+      // Zoom
+      if (isExtended(0) && isExtended(2) && !isExtended(1) && !isExtended(3) && !isExtended(4)) {
+        return { type: 'zoom', confidence: 0.8, position: { x: (thumbTip.x + middleTip.x)/2, y: (thumbTip.y + middleTip.y)/2 }, distance: thumbMiddleDist };
+      }
+      // Fist
+      if (extended.length === 0) {
+        return { type: 'fist', confidence: 0.9, position: { x: landmarks[9].x, y: landmarks[9].y } };
+      }
+      // Palm
+      if (extended.length >= 4) {
+        return { type: 'palm', confidence: 0.8, position: { x: landmarks[9].x, y: landmarks[9].y } };
+      }
+      // Point
+      if (extended.length === 1 && isExtended(1)) {
+        return { type: 'pinch', confidence: 0.7, position: { x: indexTip.x, y: indexTip.y } };
+      }
+      return { type: 'none', confidence: 0, position: { x: 0, y: 0 } };
+    }
 
     async function init() {
       console.log('init() called in CameraView');
@@ -107,31 +149,45 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected }) => 
         console.log('H: MediaPipe Hands options set');
 
         hands.onResults((results) => {
-          console.log('I: MediaPipe onResults called', results);
           if (!running) return;
           if (canvasRef.current && videoRef.current) {
             const ctx = canvasRef.current.getContext('2d');
-            if (!ctx) {
-              console.warn('No 2D context on canvas');
-              return;
-            }
+            if (!ctx) return;
             ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-              console.log('J: Detected hand landmarks:', results.multiHandLandmarks[0]);
               for (const landmarks of results.multiHandLandmarks) {
-                // Mirror the x coordinate for each landmark
                 const mirroredLandmarks = landmarks.map(pt => ({ ...pt, x: 1 - pt.x }));
+                latestLandmarksRef.current = mirroredLandmarks;
                 drawConnectors(ctx, mirroredLandmarks, HAND_CONNECTIONS, { color: '#FF0000', lineWidth: 2 });
                 drawLandmarks(ctx, mirroredLandmarks, { color: '#00FF00', lineWidth: 1 });
+                // --- NEW: Emit hand position for drawing if pinch detected ---
+                if (handPositionCallbackRef.current) {
+                  const calculateDistance = (a: any, b: any) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+                  const getTip = (f: number) => mirroredLandmarks[[4,8,12,16,20][f]];
+                  const getPip = (f: number) => mirroredLandmarks[[3,6,10,14,18][f]];
+                  const getMcp = (f: number) => mirroredLandmarks[[2,5,9,13,17][f]];
+                  const isExtended = (f: number) => {
+                    const tip = getTip(f), pip = getPip(f), mcp = getMcp(f);
+                    if (f === 0) return Math.abs(tip.x - mcp.x) > Math.abs(pip.x - mcp.x) + 0.02;
+                    return mcp.y - tip.y > mcp.y - pip.y + 0.02;
+                  };
+                  const extended = [0,1,2,3,4].filter(isExtended);
+                  const thumbTip = getTip(0), indexTip = getTip(1);
+                  const thumbIndexDist = calculateDistance(thumbTip, indexTip);
+                  if (thumbIndexDist < 0.06 && extended.length <= 1) {
+                    const pinchPos = { x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2 };
+                    lastPinchPosition = pinchPos;
+                    handPositionCallbackRef.current(pinchPos);
+                  } else {
+                    lastPinchPosition = null;
+                    handPositionCallbackRef.current(null);
+                  }
+                }
               }
             } else {
-              console.log('M: No hand landmarks detected in this frame.');
+              latestLandmarksRef.current = null;
+              if (handPositionCallbackRef.current) handPositionCallbackRef.current(null);
             }
-            if (videoRef.current) {
-              console.log('N: Camera onFrame running');
-            }
-          } else {
-            console.warn('O: Canvas or video ref missing in onResults');
           }
         });
         console.log('P: MediaPipe Hands onResults handler set');
@@ -141,14 +197,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected }) => 
             onFrame: async () => {
               if (videoRef.current) {
                 try {
-                  console.log('Q: Calling hands.send with video frame');
                   await hands.send({ image: videoRef.current });
-                  console.log('R: hands.send completed');
                 } catch (err) {
-                  console.error('S: Error during hands.send:', err);
+                  // Ignore errors
                 }
-              } else {
-                console.warn('T: videoRef.current is null in onFrame');
               }
             },
             width: 640,
@@ -156,18 +208,38 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected }) => 
           });
           camera.start();
           console.log('U: MediaPipe Hands and Camera started');
-        } else {
-          console.warn('V: videoRef.current is null when creating Camera');
         }
       } catch (err) {
         console.error('W: Error in CameraView init:', err);
       }
     }
     init();
+
+    // Gesture recognition interval (1fps, decoupled)
+    const gestureInterval = setInterval(() => {
+      if (!running) return;
+      const landmarks = latestLandmarksRef.current;
+      let gesture: GestureState = lastGesture;
+      if (landmarks) {
+        gesture = detectGesture(landmarks);
+      }
+      if (
+        gesture.type !== lastGesture.type ||
+        Math.abs(gesture.confidence - lastGesture.confidence) > 0.1
+      ) {
+        lastGesture = gesture;
+        gestureCallbackRef.current(gesture);
+      } else {
+        gestureCallbackRef.current(lastGesture);
+      }
+    }, 1000);
+
     return () => {
       running = false;
+      clearInterval(gestureInterval);
     };
-  }, [videoRef, isLoading, onGestureDetected]);
+  // Only run on mount (and when videoRef/isLoading change)
+  }, [videoRef, isLoading]);
 
   if (error) {
     return (

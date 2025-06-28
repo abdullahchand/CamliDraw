@@ -234,7 +234,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-hidden relative">
       {/* Camera view with transparency */}
-      <CameraView onGestureDetected={handleGestureDetected} />
+      <CameraView onGestureDetected={handleGestureDetected} onHandPositionUpdate={handleHandPositionUpdate} />
       
       {/* Glass overlay */}
       <div className="absolute inset-0 bg-gray-900/10 backdrop-blur-[1px] z-5"></div>
