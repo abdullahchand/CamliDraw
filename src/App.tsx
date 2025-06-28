@@ -109,16 +109,43 @@ function App() {
 
     // Handle panning (palm gesture)
     if (gesture.type === 'palm' && gesture.confidence > 0.7) {
+      console.log('Palm gesture detected for panning, confidence:', gesture.confidence);
+      // Flip x coordinate for mirrored camera (to match the visual display)
+      const flippedPosition = { x: 1 - gesture.position.x, y: gesture.position.y };
+      const flippedScreenPoint = {
+        x: flippedPosition.x * window.innerWidth,
+        y: flippedPosition.y * window.innerHeight
+      };
+      
+      console.log('Panning coordinates:', {
+        original: { x: gesture.position.x.toFixed(3), y: gesture.position.y.toFixed(3) },
+        flipped: { x: flippedPosition.x.toFixed(3), y: flippedPosition.y.toFixed(3) },
+        screenPoint: { x: flippedScreenPoint.x.toFixed(1), y: flippedScreenPoint.y.toFixed(1) },
+        windowSize: { width: window.innerWidth, height: window.innerHeight }
+      });
+      
       if (!drawingState.isPanning) {
-        panStartRef.current = screenPoint;
+        console.log('Starting panning');
+        panStartRef.current = flippedScreenPoint;
         setDrawingState(prev => ({
           ...prev,
           isPanning: true
         }));
       } else if (panStartRef.current) {
-        const deltaX = screenPoint.x - panStartRef.current.x;
-        const deltaY = screenPoint.y - panStartRef.current.y;
+        const deltaX = flippedScreenPoint.x - panStartRef.current.x;
+        const deltaY = flippedScreenPoint.y - panStartRef.current.y;
         
+        console.log('Panning delta:', {
+          deltaX: deltaX.toFixed(1),
+          deltaY: deltaY.toFixed(1),
+          startPoint: { x: panStartRef.current.x.toFixed(1), y: panStartRef.current.y.toFixed(1) },
+          currentPoint: { x: flippedScreenPoint.x.toFixed(1), y: flippedScreenPoint.y.toFixed(1) },
+          rawDeltaX: deltaX,
+          rawDeltaY: deltaY
+        });
+        
+        // Apply pan movement regardless of size
+        console.log('Applying pan movement');
         setDrawingState(prev => ({
           ...prev,
           offset: {
@@ -127,9 +154,10 @@ function App() {
           }
         }));
         
-        panStartRef.current = screenPoint;
+        panStartRef.current = flippedScreenPoint;
       }
     } else if (drawingState.isPanning && gesture.type !== 'palm') {
+      console.log('Stopping panning - gesture changed to:', gesture.type);
       setDrawingState(prev => ({
         ...prev,
         isPanning: false
@@ -164,7 +192,7 @@ function App() {
       lastZoomDistanceRef.current = null;
     }
 
-    // Handle erasing (fist gesture)
+    // Handle erasing (fist gesture - closed hand)
     if (gesture.type === 'fist' && gesture.confidence > 0.8) {
       // Flip x coordinate for mirrored camera (to match the visual display)
       const flippedPosition = { x: 1 - gesture.position.x, y: gesture.position.y };

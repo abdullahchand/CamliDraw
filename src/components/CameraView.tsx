@@ -114,7 +114,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
       }
       // Palm
       if (extended.length >= 4) {
-        return { type: 'palm', confidence: 0.8, position: { x: landmarks[9].x, y: landmarks[9].y } };
+        return { type: 'palm', confidence: 0.8, position: { x: landmarks[0].x, y: landmarks[0].y } };
       }
       // Point
       if (extended.length === 1 && isExtended(1)) {
@@ -153,8 +153,14 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
           if (canvasRef.current && videoRef.current) {
             const ctx = canvasRef.current.getContext('2d');
             if (!ctx) return;
+            
+            // Set canvas size to match video dimensions
+            canvasRef.current.width = videoRef.current.videoWidth;
+            canvasRef.current.height = videoRef.current.videoHeight;
+            
             ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+              console.log('MediaPipe hand detected, landmarks count:', results.multiHandLandmarks.length);
               for (const landmarks of results.multiHandLandmarks) {
                 const mirroredLandmarks = landmarks.map(pt => ({ ...pt, x: 1 - pt.x }));
                 latestLandmarksRef.current = landmarks; // Store original landmarks for gesture detection
@@ -186,6 +192,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
                 }
               }
             } else {
+              console.log('No MediaPipe hands detected');
               latestLandmarksRef.current = null;
               if (handPositionCallbackRef.current) handPositionCallbackRef.current(null);
             }
@@ -194,9 +201,19 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
         console.log('P: MediaPipe Hands onResults handler set');
 
         if (videoRef.current) {
+          // Debug camera frame rate
+          let frameCount = 0;
+          const startTime = Date.now();
+          
           const camera = new Camera(videoRef.current, {
             onFrame: async () => {
               if (videoRef.current) {
+                frameCount++;
+                if (frameCount % 30 === 0) { // Log every 30 frames
+                  const elapsed = (Date.now() - startTime) / 1000;
+                  const fps = frameCount / elapsed;
+                  console.log('MediaPipe frame count:', frameCount, 'FPS:', fps.toFixed(1), 'at', new Date().toISOString());
+                }
                 try {
                   await hands.send({ image: videoRef.current });
                 } catch (err) {
@@ -216,13 +233,25 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
     }
     init();
 
-    // Gesture recognition interval (15fps, decoupled)
+    // Gesture recognition interval (30fps, decoupled)
     const gestureInterval = setInterval(() => {
       if (!running) return;
       const landmarks = latestLandmarksRef.current;
       let gesture: GestureState = lastGesture;
       if (landmarks) {
         gesture = detectGesture(landmarks);
+        // Debug palm gesture position
+        if (gesture.type === 'palm') {
+          console.log('Palm gesture detected:', {
+            x: gesture.position.x.toFixed(3),
+            y: gesture.position.y.toFixed(3),
+            wrist: { x: landmarks[0].x.toFixed(3), y: landmarks[0].y.toFixed(3) },
+            timestamp: Date.now()
+          });
+        }
+      } else {
+        console.log('No landmarks available for gesture detection - resetting to none');
+        gesture = { type: 'none', confidence: 0, position: { x: 0, y: 0 } };
       }
       if (
         gesture.type !== lastGesture.type ||
@@ -233,7 +262,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
       } else {
         gestureCallbackRef.current(lastGesture);
       }
-    }, 67); // 15 FPS (1000ms / 15 ≈ 67ms)
+    }, 33); // 30 FPS (1000ms / 30 ≈ 33ms)
 
     return () => {
       running = false;
@@ -264,8 +293,6 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
       />
       <canvas
         ref={canvasRef}
-        width={640}
-        height={480}
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ zIndex: 10 }}
       />
