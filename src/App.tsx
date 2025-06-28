@@ -29,6 +29,10 @@ function App() {
   const panStartRef = useRef<Point | null>(null);
   const gestureTimeoutRef = useRef<number | null>(null);
   const lastGestureTypeRef = useRef<string | null>(null);
+  const lastDrawPositionRef = useRef<Point | null>(null);
+  const positionHistoryRef = useRef<Point[]>([]);
+  const MIN_DISTANCE_THRESHOLD = 0.01;
+  const SMOOTHING_WINDOW = 3;
 
   const screenToCanvas = useCallback((screenPoint: Point): Point => {
     return {
@@ -201,16 +205,44 @@ function App() {
 
   const handleHandPositionUpdate = useCallback((position: Point | null) => {
     if (lastGestureTypeRef.current === 'pinch' && position) {
-      // Flip x coordinate for mirrored camera
-      const flippedPosition = { x: 1 - position.x, y: position.y };
+      // Add position to history for smoothing
+      positionHistoryRef.current.push(position);
+      if (positionHistoryRef.current.length > SMOOTHING_WINDOW) {
+        positionHistoryRef.current.shift();
+      }
+      
+      // Calculate smoothed position (average of recent positions)
+      const smoothedPosition = {
+        x: positionHistoryRef.current.reduce((sum, p) => sum + p.x, 0) / positionHistoryRef.current.length,
+        y: positionHistoryRef.current.reduce((sum, p) => sum + p.y, 0) / positionHistoryRef.current.length
+      };
+      
+      // Check minimum distance threshold
+      if (lastDrawPositionRef.current) {
+        const distance = Math.sqrt(
+          Math.pow(smoothedPosition.x - lastDrawPositionRef.current.x, 2) +
+          Math.pow(smoothedPosition.y - lastDrawPositionRef.current.y, 2)
+        );
+        
+        // Only add point if moved enough distance
+        if (distance < MIN_DISTANCE_THRESHOLD) {
+          return;
+        }
+      }
+      
+      // Flip x coordinate for mirrored camera (to match the visual display)
+      const flippedPosition = { x: 1 - smoothedPosition.x, y: smoothedPosition.y };
       const canvasPoint = screenToCanvas(flippedPosition);
+      
       setDrawingState(prev => {
-        // Only add if not duplicate
+        // Only add if not duplicate and path is not too long (prevent memory issues)
         if (
           prev.currentPath.length === 0 ||
-          prev.currentPath[prev.currentPath.length - 1].x !== canvasPoint.x ||
-          prev.currentPath[prev.currentPath.length - 1].y !== canvasPoint.y
+          (prev.currentPath[prev.currentPath.length - 1].x !== canvasPoint.x ||
+           prev.currentPath[prev.currentPath.length - 1].y !== canvasPoint.y) &&
+          prev.currentPath.length < 1000 // Prevent infinite growth
         ) {
+          lastDrawPositionRef.current = smoothedPosition;
           return {
             ...prev,
             isDrawing: true,
@@ -219,6 +251,10 @@ function App() {
         }
         return prev;
       });
+    } else {
+      // Clear position history when not drawing
+      positionHistoryRef.current = [];
+      lastDrawPositionRef.current = null;
     }
   }, [screenToCanvas]);
 

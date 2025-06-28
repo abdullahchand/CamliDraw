@@ -157,15 +157,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
               for (const landmarks of results.multiHandLandmarks) {
                 const mirroredLandmarks = landmarks.map(pt => ({ ...pt, x: 1 - pt.x }));
-                latestLandmarksRef.current = mirroredLandmarks;
+                latestLandmarksRef.current = landmarks; // Store original landmarks for gesture detection
                 drawConnectors(ctx, mirroredLandmarks, HAND_CONNECTIONS, { color: '#FF0000', lineWidth: 2 });
                 drawLandmarks(ctx, mirroredLandmarks, { color: '#00FF00', lineWidth: 1 });
                 // --- NEW: Emit hand position for drawing if pinch detected ---
                 if (handPositionCallbackRef.current) {
                   const calculateDistance = (a: any, b: any) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-                  const getTip = (f: number) => mirroredLandmarks[[4,8,12,16,20][f]];
-                  const getPip = (f: number) => mirroredLandmarks[[3,6,10,14,18][f]];
-                  const getMcp = (f: number) => mirroredLandmarks[[2,5,9,13,17][f]];
+                  // Use original landmarks for drawing coordinates (not mirrored)
+                  const getTip = (f: number) => landmarks[[4,8,12,16,20][f]];
+                  const getPip = (f: number) => landmarks[[3,6,10,14,18][f]];
+                  const getMcp = (f: number) => landmarks[[2,5,9,13,17][f]];
                   const isExtended = (f: number) => {
                     const tip = getTip(f), pip = getPip(f), mcp = getMcp(f);
                     if (f === 0) return Math.abs(tip.x - mcp.x) > Math.abs(pip.x - mcp.x) + 0.02;
@@ -215,7 +216,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
     }
     init();
 
-    // Gesture recognition interval (1fps, decoupled)
+    // Gesture recognition interval (15fps, decoupled)
     const gestureInterval = setInterval(() => {
       if (!running) return;
       const landmarks = latestLandmarksRef.current;
@@ -232,7 +233,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
       } else {
         gestureCallbackRef.current(lastGesture);
       }
-    }, 1000);
+    }, 67); // 15 FPS (1000ms / 15 ≈ 67ms)
 
     return () => {
       running = false;
