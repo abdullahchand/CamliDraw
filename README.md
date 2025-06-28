@@ -127,36 +127,16 @@ We welcome contributions! Here's how you can help:
 - **Workaround**: Make deliberate palm movements for better panning control
 - **Technical Details**: Related to gesture detection frequency and coordinate mapping
 
-### [Issue #2] Hand Detection in Low Light
-- **Status**: Known limitation
-- **Description**: Hand tracking accuracy decreases in poor lighting conditions
-- **Workaround**: Ensure good, even lighting on your hands
-- **Future**: Plan to add adaptive lighting detection
-
-### [Issue #3] Gesture Conflicts
+### [Issue #2] Gesture Conflicts
 - **Status**: Under investigation
 - **Description**: Some gestures may be confused with each other
 - **Workaround**: Use clear, distinct hand positions for each gesture
 - **Future**: Implement gesture confidence thresholds and context awareness
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **MediaPipe**: For the excellent hand tracking API
-- **Excalidraw**: For inspiration in the drawing interface design
-- **React Community**: For the amazing ecosystem and tools
-
-## 📞 Support
-
-- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/yourusername/camlidraw/issues)
-- **Discussions**: Join the conversation on [GitHub Discussions](https://github.com/yourusername/camlidraw/discussions)
-- **Email**: For private inquiries, contact [your-email@example.com]
-
 ## 🗺️ Roadmap
 
+- [ ] Smoothen the current implementation to feel intuitive and not buggy.
+- [ ] Have smoother line sepration.
 - [ ] Add more gesture types (circle, rectangle, etc.)
 - [ ] Implement undo/redo functionality
 - [ ] Add drawing tools (brush sizes, colors)
