@@ -28,6 +28,7 @@ function App() {
   const lastZoomDistanceRef = useRef<number | null>(null);
   const panStartRef = useRef<Point | null>(null);
   const gestureTimeoutRef = useRef<number | null>(null);
+  const lastGestureTypeRef = useRef<string | null>(null);
 
   const screenToCanvas = useCallback((screenPoint: Point): Point => {
     return {
@@ -179,6 +180,7 @@ function App() {
     }
 
     lastGestureRef.current = gesture;
+    lastGestureTypeRef.current = gesture.type;
   }, [drawingState, screenToCanvas]);
 
   const handleClearCanvas = useCallback(() => {
@@ -196,6 +198,29 @@ function App() {
       offset: { x: 0, y: 0 }
     }));
   }, []);
+
+  const handleHandPositionUpdate = useCallback((position: Point | null) => {
+    if (lastGestureTypeRef.current === 'pinch' && position) {
+      // Flip x coordinate for mirrored camera
+      const flippedPosition = { x: 1 - position.x, y: position.y };
+      const canvasPoint = screenToCanvas(flippedPosition);
+      setDrawingState(prev => {
+        // Only add if not duplicate
+        if (
+          prev.currentPath.length === 0 ||
+          prev.currentPath[prev.currentPath.length - 1].x !== canvasPoint.x ||
+          prev.currentPath[prev.currentPath.length - 1].y !== canvasPoint.y
+        ) {
+          return {
+            ...prev,
+            isDrawing: true,
+            currentPath: [...prev.currentPath, canvasPoint]
+          };
+        }
+        return prev;
+      });
+    }
+  }, [screenToCanvas]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

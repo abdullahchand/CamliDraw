@@ -119,8 +119,10 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected }) => 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
               console.log('J: Detected hand landmarks:', results.multiHandLandmarks[0]);
               for (const landmarks of results.multiHandLandmarks) {
-                drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#FF0000', lineWidth: 2 });
-                drawLandmarks(ctx, landmarks, { color: '#00FF00', lineWidth: 1 });
+                // Mirror the x coordinate for each landmark
+                const mirroredLandmarks = landmarks.map(pt => ({ ...pt, x: 1 - pt.x }));
+                drawConnectors(ctx, mirroredLandmarks, HAND_CONNECTIONS, { color: '#FF0000', lineWidth: 2 });
+                drawLandmarks(ctx, mirroredLandmarks, { color: '#00FF00', lineWidth: 1 });
               }
             } else {
               console.log('M: No hand landmarks detected in this frame.');
