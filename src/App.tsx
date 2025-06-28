@@ -47,6 +47,8 @@ function App() {
       window.clearTimeout(gestureTimeoutRef.current);
     }
 
+    console.log('Gesture detected:', gesture.type, 'confidence:', gesture.confidence, 'isDrawing:', drawingState.isDrawing);
+
     setCurrentGesture(gesture);
     
     const lastGesture = lastGestureRef.current;
@@ -57,41 +59,52 @@ function App() {
 
     // Handle drawing (pinch gesture)
     if (gesture.type === 'pinch' && gesture.confidence > 0.6) {
-      const canvasPoint = screenToCanvas(gesture.position);
-      
+      console.log('Pinch gesture detected with confidence:', gesture.confidence);
+      // Only set drawing state, don't add points here
+      // Points will be added by handleHandPositionUpdate for smoother drawing
       if (!drawingState.isDrawing) {
-        // Start new path
-        setDrawingState(prev => ({
-          ...prev,
-          isDrawing: true,
-          currentPath: [canvasPoint]
-        }));
+        console.log('Starting new drawing session - clearing all state');
+        // Clear all drawing state and start fresh
+        setDrawingState(prev => {
+          console.log('Previous currentPath length:', prev.currentPath.length);
+          return {
+            ...prev,
+            isDrawing: true,
+            currentPath: [] // Ensure completely empty path
+          };
+        });
+        // Reset position tracking for new drawing session
+        positionHistoryRef.current = [];
+        lastDrawPositionRef.current = null;
+        console.log('Drawing state reset complete');
       } else {
-        // Continue current path
-        setDrawingState(prev => ({
-          ...prev,
-          currentPath: [...prev.currentPath, canvasPoint]
-        }));
+        console.log('Already drawing, continuing...');
       }
     } else if (drawingState.isDrawing && gesture.type !== 'pinch') {
-      // Finish drawing path with a delay to prevent flickering
-      gestureTimeoutRef.current = window.setTimeout(() => {
-        setDrawingState(prev => {
-          if (prev.currentPath.length > 1) {
-            return {
-              ...prev,
-              isDrawing: false,
-              paths: [...prev.paths, prev.currentPath],
-              currentPath: []
-            };
-          }
+      console.log('Stopping drawing - gesture changed to:', gesture.type);
+      // Immediately stop drawing and finish the path
+      setDrawingState(prev => {
+        console.log('Finishing drawing path immediately, length:', prev.currentPath.length);
+        if (prev.currentPath.length > 1) {
           return {
             ...prev,
             isDrawing: false,
+            paths: [...prev.paths, prev.currentPath],
             currentPath: []
           };
-        });
-      }, 100);
+        }
+        return {
+          ...prev,
+          isDrawing: false,
+          currentPath: []
+        };
+      });
+    }
+
+    // Reset gesture type when no gesture is detected
+    if (gesture.type === 'none') {
+      console.log('No gesture detected - resetting gesture type');
+      lastGestureTypeRef.current = null;
     }
 
     // Handle panning (palm gesture)
@@ -153,7 +166,9 @@ function App() {
 
     // Handle erasing (fist gesture)
     if (gesture.type === 'fist' && gesture.confidence > 0.8) {
-      const canvasPoint = screenToCanvas(gesture.position);
+      // Flip x coordinate for mirrored camera (to match the visual display)
+      const flippedPosition = { x: 1 - gesture.position.x, y: gesture.position.y };
+      const canvasPoint = screenToCanvas(flippedPosition);
       
       if (!drawingState.isErasing) {
         setDrawingState(prev => ({
@@ -235,13 +250,24 @@ function App() {
       const canvasPoint = screenToCanvas(flippedPosition);
       
       setDrawingState(prev => {
-        // Only add if not duplicate and path is not too long (prevent memory issues)
+        // If this is the first point in a new drawing session, ensure path is empty
+        if (prev.currentPath.length === 0) {
+          console.log('Adding first point to new path:', canvasPoint);
+          lastDrawPositionRef.current = smoothedPosition;
+          return {
+            ...prev,
+            isDrawing: true,
+            currentPath: [canvasPoint] // Start fresh path
+          };
+        }
+        
+        // Continue existing path only if not duplicate and path is not too long
         if (
-          prev.currentPath.length === 0 ||
           (prev.currentPath[prev.currentPath.length - 1].x !== canvasPoint.x ||
            prev.currentPath[prev.currentPath.length - 1].y !== canvasPoint.y) &&
           prev.currentPath.length < 1000 // Prevent infinite growth
         ) {
+          console.log('Adding point to existing path, total points:', prev.currentPath.length + 1);
           lastDrawPositionRef.current = smoothedPosition;
           return {
             ...prev,
@@ -252,7 +278,10 @@ function App() {
         return prev;
       });
     } else {
-      // Clear position history when not drawing
+      // Clear position history when not drawing or when gesture type is null
+      if (positionHistoryRef.current.length > 0) {
+        console.log('Clearing position history - not drawing or gesture reset');
+      }
       positionHistoryRef.current = [];
       lastDrawPositionRef.current = null;
     }

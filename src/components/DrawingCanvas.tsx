@@ -18,22 +18,25 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     const ctx = ctxRef.current;
     if (!canvas || !ctx) return;
 
-    // Clear canvas
+    // Clear canvas completely
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    console.log('Redrawing canvas - paths:', drawingState.paths.length, 'currentPath:', drawingState.currentPath.length);
 
     // Apply transformations
     ctx.save();
     ctx.translate(drawingState.offset.x, drawingState.offset.y);
     ctx.scale(drawingState.scale, drawingState.scale);
 
-    // Draw all paths
+    // Draw all completed paths
     ctx.strokeStyle = '#60a5fa';
     ctx.lineWidth = 3 / drawingState.scale;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    drawingState.paths.forEach(path => {
+    drawingState.paths.forEach((path, index) => {
       if (path.length > 1) {
+        console.log(`Drawing path ${index} with ${path.length} points`);
         ctx.beginPath();
         ctx.moveTo(path[0].x, path[0].y);
         for (let i = 1; i < path.length; i++) {
@@ -43,8 +46,9 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       }
     });
 
-    // Draw current path
+    // Draw current path (if any)
     if (drawingState.currentPath.length > 1) {
+      console.log(`Drawing current path with ${drawingState.currentPath.length} points`);
       ctx.strokeStyle = '#3b82f6';
       ctx.beginPath();
       ctx.moveTo(drawingState.currentPath[0].x, drawingState.currentPath[0].y);
