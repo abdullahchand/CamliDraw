@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import { useCamera } from '../hooks/useCamera';
+import React, { useEffect, useRef, useState } from 'react';
+import { useCamera, CameraDevice } from '../hooks/useCamera';
 import { GestureState } from '../types/gestures';
 import { Hands } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { useRef as useReactRef } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 interface CameraViewProps {
   onGestureDetected: (gesture: GestureState) => void;
@@ -66,13 +67,37 @@ function waitForVideoReady(video: HTMLVideoElement): Promise<void> {
 }
 
 export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHandPositionUpdate }) => {
-  const { videoRef, isLoading, error } = useCamera();
+  // Camera selection state
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
+  const { videoRef, isLoading, error, devices } = useCamera(selectedDeviceId);
   const canvasRef = useReactRef<HTMLCanvasElement>(null);
   // Store refs for callbacks so they are always up to date
   const gestureCallbackRef = useRef(onGestureDetected);
   const handPositionCallbackRef = useRef(onHandPositionUpdate);
   gestureCallbackRef.current = onGestureDetected;
   handPositionCallbackRef.current = onHandPositionUpdate;
+  const [showCameraMenu, setShowCameraMenu] = useState(false);
+
+  // Set default camera on first load if not set
+  useEffect(() => {
+    // Log available devices and current selection
+    console.log('[CameraView] Available camera devices:', devices);
+    console.log('[CameraView] Current selectedDeviceId:', selectedDeviceId);
+    if (devices.length > 0) {
+      const external = devices.find(d => d.label.includes('Logi'));
+      // If external camera appears and is not selected, switch to it
+      if (external && selectedDeviceId !== external.deviceId) {
+        console.log('[CameraView] Switching to external camera:', external.label, external.deviceId);
+        setSelectedDeviceId(external.deviceId);
+      } else if (
+        // If no camera selected, or selectedDeviceId is empty, or selectedDeviceId is not in the device list
+        !selectedDeviceId || selectedDeviceId === '' || !devices.some(d => d.deviceId === selectedDeviceId)
+      ) {
+        console.log('[CameraView] No valid camera selected, defaulting to:', devices[0].label, devices[0].deviceId);
+        setSelectedDeviceId(devices[0].deviceId);
+      }
+    }
+  }, [devices, selectedDeviceId]);
 
   // --- Only run MediaPipe/camera setup ONCE ---
   useEffect(() => {
@@ -160,7 +185,6 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
             
             ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-              console.log('MediaPipe hand detected, landmarks count:', results.multiHandLandmarks.length);
               for (const landmarks of results.multiHandLandmarks) {
                 const mirroredLandmarks = landmarks.map(pt => ({ ...pt, x: 1 - pt.x }));
                 latestLandmarksRef.current = landmarks; // Store original landmarks for gesture detection
@@ -192,7 +216,6 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
                 }
               }
             } else {
-              console.log('No MediaPipe hands detected');
               latestLandmarksRef.current = null;
               if (handPositionCallbackRef.current) handPositionCallbackRef.current(null);
             }
@@ -240,17 +263,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
       let gesture: GestureState = lastGesture;
       if (landmarks) {
         gesture = detectGesture(landmarks);
-        // Debug palm gesture position
-        if (gesture.type === 'palm') {
-          console.log('Palm gesture detected:', {
-            x: gesture.position.x.toFixed(3),
-            y: gesture.position.y.toFixed(3),
-            wrist: { x: landmarks[0].x.toFixed(3), y: landmarks[0].y.toFixed(3) },
-            timestamp: Date.now()
-          });
-        }
       } else {
-        console.log('No landmarks available for gesture detection - resetting to none');
         gesture = { type: 'none', confidence: 0, position: { x: 0, y: 0 } };
       }
       if (
@@ -286,7 +299,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
     <div className="absolute inset-0 z-0">
       <video
         ref={videoRef}
-        className="w-full h-full object-cover opacity-20 scale-x-[-1]"
+        className="w-full h-full object-cover opacity-20 scale-x-[-1] pointer-events-none"
         autoPlay
         muted
         playsInline
@@ -296,6 +309,32 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ zIndex: 10 }}
       />
+      {/* Camera selection button and menu */}
+      {devices.length > 1 && (
+        <>
+          <button
+            onClick={() => setShowCameraMenu((v) => !v)}
+            className="fixed top-6 right-6 z-50 px-4 py-2 bg-gray-900/80 backdrop-blur-sm border border-gray-700/50 rounded-lg text-gray-300 hover:text-white transition-colors"
+            style={{ minWidth: 120 }}
+          >
+            {devices.find(d => d.deviceId === selectedDeviceId)?.label || 'Select Camera'}
+            <ChevronDown className="w-4 h-4 inline ml-2" />
+          </button>
+          {showCameraMenu && (
+            <div className="fixed top-20 right-6 z-50 bg-gray-900/95 border border-gray-700/50 rounded-lg shadow-lg p-2 flex flex-col min-w-[180px]">
+              {devices.map((device) => (
+                <button
+                  key={device.deviceId}
+                  onClick={() => { setSelectedDeviceId(device.deviceId); setShowCameraMenu(false); }}
+                  className={`text-left px-3 py-2 rounded hover:bg-gray-800 transition-colors ${device.deviceId === selectedDeviceId ? 'bg-gray-700 text-blue-400 font-semibold' : 'text-gray-200'}`}
+                >
+                  {device.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

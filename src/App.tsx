@@ -47,8 +47,6 @@ function App() {
       window.clearTimeout(gestureTimeoutRef.current);
     }
 
-    console.log('Gesture detected:', gesture.type, 'confidence:', gesture.confidence, 'isDrawing:', drawingState.isDrawing);
-
     setCurrentGesture(gesture);
     
     const lastGesture = lastGestureRef.current;
@@ -59,14 +57,11 @@ function App() {
 
     // Handle drawing (pinch gesture)
     if (gesture.type === 'pinch' && gesture.confidence > 0.6) {
-      console.log('Pinch gesture detected with confidence:', gesture.confidence);
       // Only set drawing state, don't add points here
       // Points will be added by handleHandPositionUpdate for smoother drawing
       if (!drawingState.isDrawing) {
-        console.log('Starting new drawing session - clearing all state');
         // Clear all drawing state and start fresh
         setDrawingState(prev => {
-          console.log('Previous currentPath length:', prev.currentPath.length);
           return {
             ...prev,
             isDrawing: true,
@@ -76,15 +71,10 @@ function App() {
         // Reset position tracking for new drawing session
         positionHistoryRef.current = [];
         lastDrawPositionRef.current = null;
-        console.log('Drawing state reset complete');
-      } else {
-        console.log('Already drawing, continuing...');
       }
     } else if (drawingState.isDrawing && gesture.type !== 'pinch') {
-      console.log('Stopping drawing - gesture changed to:', gesture.type);
       // Immediately stop drawing and finish the path
       setDrawingState(prev => {
-        console.log('Finishing drawing path immediately, length:', prev.currentPath.length);
         if (prev.currentPath.length > 1) {
           return {
             ...prev,
@@ -103,13 +93,11 @@ function App() {
 
     // Reset gesture type when no gesture is detected
     if (gesture.type === 'none') {
-      console.log('No gesture detected - resetting gesture type');
       lastGestureTypeRef.current = null;
     }
 
     // Handle panning (palm gesture)
     if (gesture.type === 'palm' && gesture.confidence > 0.7) {
-      console.log('Palm gesture detected for panning, confidence:', gesture.confidence);
       // Flip x coordinate for mirrored camera (to match the visual display)
       const flippedPosition = { x: 1 - gesture.position.x, y: gesture.position.y };
       const flippedScreenPoint = {
@@ -117,15 +105,7 @@ function App() {
         y: flippedPosition.y * window.innerHeight
       };
       
-      console.log('Panning coordinates:', {
-        original: { x: gesture.position.x.toFixed(3), y: gesture.position.y.toFixed(3) },
-        flipped: { x: flippedPosition.x.toFixed(3), y: flippedPosition.y.toFixed(3) },
-        screenPoint: { x: flippedScreenPoint.x.toFixed(1), y: flippedScreenPoint.y.toFixed(1) },
-        windowSize: { width: window.innerWidth, height: window.innerHeight }
-      });
-      
       if (!drawingState.isPanning) {
-        console.log('Starting panning');
         panStartRef.current = flippedScreenPoint;
         setDrawingState(prev => ({
           ...prev,
@@ -135,17 +115,7 @@ function App() {
         const deltaX = flippedScreenPoint.x - panStartRef.current.x;
         const deltaY = flippedScreenPoint.y - panStartRef.current.y;
         
-        console.log('Panning delta:', {
-          deltaX: deltaX.toFixed(1),
-          deltaY: deltaY.toFixed(1),
-          startPoint: { x: panStartRef.current.x.toFixed(1), y: panStartRef.current.y.toFixed(1) },
-          currentPoint: { x: flippedScreenPoint.x.toFixed(1), y: flippedScreenPoint.y.toFixed(1) },
-          rawDeltaX: deltaX,
-          rawDeltaY: deltaY
-        });
-        
         // Apply pan movement regardless of size
-        console.log('Applying pan movement');
         setDrawingState(prev => ({
           ...prev,
           offset: {
@@ -157,7 +127,6 @@ function App() {
         panStartRef.current = flippedScreenPoint;
       }
     } else if (drawingState.isPanning && gesture.type !== 'palm') {
-      console.log('Stopping panning - gesture changed to:', gesture.type);
       setDrawingState(prev => ({
         ...prev,
         isPanning: false
@@ -280,7 +249,6 @@ function App() {
       setDrawingState(prev => {
         // If this is the first point in a new drawing session, ensure path is empty
         if (prev.currentPath.length === 0) {
-          console.log('Adding first point to new path:', canvasPoint);
           lastDrawPositionRef.current = smoothedPosition;
           return {
             ...prev,
@@ -295,7 +263,6 @@ function App() {
            prev.currentPath[prev.currentPath.length - 1].y !== canvasPoint.y) &&
           prev.currentPath.length < 1000 // Prevent infinite growth
         ) {
-          console.log('Adding point to existing path, total points:', prev.currentPath.length + 1);
           lastDrawPositionRef.current = smoothedPosition;
           return {
             ...prev,
@@ -308,9 +275,8 @@ function App() {
     } else {
       // Clear position history when not drawing or when gesture type is null
       if (positionHistoryRef.current.length > 0) {
-        console.log('Clearing position history - not drawing or gesture reset');
+        positionHistoryRef.current = [];
       }
-      positionHistoryRef.current = [];
       lastDrawPositionRef.current = null;
     }
   }, [screenToCanvas]);

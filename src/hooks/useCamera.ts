@@ -1,13 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 
-export const useCamera = () => {
+export interface CameraDevice {
+  deviceId: string;
+  label: string;
+}
+
+export const useCamera = (deviceId?: string) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [devices, setDevices] = useState<CameraDevice[]>([]);
+  const deviceIdRef = useRef(deviceId);
+  useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
+
+  // Enumerate cameras
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = allDevices
+          .filter((d) => d.kind === 'videoinput')
+          .map((d) => ({ deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(-4)}` }));
+        setDevices(videoDevices);
+      } catch (err) {
+        setDevices([]);
+      }
+    };
+    getDevices();
+  }, []);
 
   useEffect(() => {
+    console.log('[useCamera] useEffect triggered with deviceId:', deviceId);
     const startCamera = async () => {
+      console.log('[useCamera] startCamera called with deviceId:', deviceIdRef.current);
       try {
         // Stop any existing stream
         if (streamRef.current) {
@@ -15,31 +41,36 @@ export const useCamera = () => {
           streamRef.current = null;
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const constraints: MediaStreamConstraints = {
           video: {
             width: { ideal: 640, max: 1280 },
             height: { ideal: 480, max: 720 },
-            facingMode: 'user',
-            frameRate: { ideal: 30, max: 60 }
+            frameRate: { ideal: 30, max: 60 },
+            ...(deviceIdRef.current ? { deviceId: { exact: deviceIdRef.current } } : { facingMode: 'user' })
           }
-        });
+        };
 
+        console.log('[useCamera] Requesting camera with constraints:', constraints);
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         streamRef.current = stream;
 
         if (videoRef.current) {
+          const currentDeviceId = deviceIdRef.current;
+          console.log('[useCamera] Setting video stream for deviceId (inside if):', currentDeviceId);
           videoRef.current.srcObject = stream;
-          console.log('Stream set on video element', videoRef.current);
-          
+          const track = stream.getVideoTracks()[0];
+          if (track) {
+            console.log('[useCamera] Actual video track label:', track.label, 'deviceId:', track.getSettings().deviceId);
+          }
           videoRef.current.onloadedmetadata = () => {
-            console.log('Video metadata loaded');
             setIsLoading(false);
             setError(null);
+            console.log('[useCamera] onloadedmetadata for deviceId:', currentDeviceId);
           };
-          
           videoRef.current.onerror = () => {
-            console.log('Video error');
             setError('Video stream error occurred');
             setIsLoading(false);
+            console.log('[useCamera] onerror for deviceId:', currentDeviceId);
           };
         }
       } catch (err) {
@@ -49,6 +80,7 @@ export const useCamera = () => {
       }
     };
 
+    setIsLoading(true);
     startCamera();
 
     return () => {
@@ -59,7 +91,7 @@ export const useCamera = () => {
         streamRef.current = null;
       }
     };
-  }, []);
+  }, [deviceId]);
 
-  return { videoRef, isLoading, error };
+  return { videoRef, isLoading, error, devices };
 };
