@@ -74,8 +74,8 @@ export const detectGesture = (landmarks: Landmark[]): GestureState => {
   });
 
   // Check for pinch gesture (thumb and index finger close, others closed)
-  if (thumbIndexDistance < 0.06 && extendedFingers <= 1) {
-    const confidence = Math.max(0.5, 1 - thumbIndexDistance * 15);
+  if (thumbIndexDistance < 0.04 && extendedFingers <= 1) {
+    const confidence = Math.max(0.4, 1 - thumbIndexDistance * 15);
     console.log('Pinch detected:', { distance: thumbIndexDistance.toFixed(3), confidence });
     return {
       type: 'pinch',
@@ -138,7 +138,7 @@ export const detectGesture = (landmarks: Landmark[]): GestureState => {
     console.log('Pointing detected');
     return {
       type: 'pinch', // Use pinch for pointing too
-      confidence: 0.7,
+      confidence: 0.4,
       position: {
         x: indexTip.x,
         y: indexTip.y

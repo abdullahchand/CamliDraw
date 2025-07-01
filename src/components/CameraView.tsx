@@ -126,8 +126,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
       const thumbIndexDist = calculateDistance(thumbTip, indexTip);
       const thumbMiddleDist = calculateDistance(thumbTip, middleTip);
       // Pinch
-      if (thumbIndexDist < 0.06 && extended.length <= 1) {
-        return { type: 'pinch', confidence: Math.max(0.5, 1 - thumbIndexDist * 15), position: { x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2 } };
+      const isPointing = extended.length === 1 && isExtended(1);
+      if ((thumbIndexDist < 0.04 && extended.length <= 1) || isPointing) {
+        const pinchPos = (thumbIndexDist < 0.04 && extended.length <= 1)
+          ? { x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2 }
+          : { x: indexTip.x, y: indexTip.y };
+        lastPinchPosition = pinchPos;
+        if (handPositionCallbackRef.current) handPositionCallbackRef.current(pinchPos);
+      } else {
+        lastPinchPosition = null;
+        if (handPositionCallbackRef.current) handPositionCallbackRef.current(null);
       }
       // Zoom
       if (isExtended(0) && isExtended(2) && !isExtended(1) && !isExtended(3) && !isExtended(4)) {
@@ -205,13 +213,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onGestureDetected, onHan
                   const extended = [0,1,2,3,4].filter(isExtended);
                   const thumbTip = getTip(0), indexTip = getTip(1);
                   const thumbIndexDist = calculateDistance(thumbTip, indexTip);
-                  if (thumbIndexDist < 0.06 && extended.length <= 1) {
-                    const pinchPos = { x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2 };
+                  const isPointing = extended.length === 1 && isExtended(1);
+                  if ((thumbIndexDist < 0.04 && extended.length <= 1) || isPointing) {
+                    const pinchPos = (thumbIndexDist < 0.04 && extended.length <= 1)
+                      ? { x: (thumbTip.x + indexTip.x)/2, y: (thumbTip.y + indexTip.y)/2 }
+                      : { x: indexTip.x, y: indexTip.y };
                     lastPinchPosition = pinchPos;
-                    handPositionCallbackRef.current(pinchPos);
+                    if (handPositionCallbackRef.current) handPositionCallbackRef.current(pinchPos);
                   } else {
                     lastPinchPosition = null;
-                    handPositionCallbackRef.current(null);
+                    if (handPositionCallbackRef.current) handPositionCallbackRef.current(null);
                   }
                 }
               }

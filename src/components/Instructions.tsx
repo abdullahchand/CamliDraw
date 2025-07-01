@@ -34,8 +34,8 @@ export const Instructions: React.FC = () => {
               <Circle className="w-4 h-4 text-blue-400" />
             </div>
             <div>
-              <p className="text-white text-sm font-medium">Pinch to Draw</p>
-              <p className="text-gray-400 text-xs">Touch thumb and index finger</p>
+              <p className="text-white text-sm font-medium">Pinch or Point to Draw</p>
+              <p className="text-gray-400 text-xs">Touch thumb and index finger, or extend only your index finger</p>
             </div>
           </div>
 

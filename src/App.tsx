@@ -56,7 +56,7 @@ function App() {
     };
 
     // Handle drawing (pinch gesture)
-    if (gesture.type === 'pinch' && gesture.confidence > 0.6) {
+    if (gesture.type === 'pinch' && gesture.confidence > 0.4) {
       // Only set drawing state, don't add points here
       // Points will be added by handleHandPositionUpdate for smoother drawing
       if (!drawingState.isDrawing) {
