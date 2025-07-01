@@ -133,9 +133,16 @@ export const detectGesture = (landmarks: Landmark[]): GestureState => {
     };
   }
 
-  // Check for pointing gesture (only index finger extended)
-  if (extendedFingers === 1 && indexExtended) {
-    console.log('Pointing detected');
+  // Check for robust pointing gesture (index extended, others not extended or tips close to wrist)
+  const isRobustPointing = indexExtended && [0,2,3,4].every(finger => {
+    if (finger === 0) return !thumbExtended || calculateDistance(getFingerTip(landmarks, 0), wrist) < 0.15;
+    if (finger === 2) return !middleExtended || calculateDistance(getFingerTip(landmarks, 2), wrist) < 0.15;
+    if (finger === 3) return !ringExtended || calculateDistance(getFingerTip(landmarks, 3), wrist) < 0.15;
+    if (finger === 4) return !pinkyExtended || calculateDistance(getFingerTip(landmarks, 4), wrist) < 0.15;
+    return true;
+  });
+  if (isRobustPointing) {
+    console.log('Robust Pointing detected');
     return {
       type: 'pinch', // Use pinch for pointing too
       confidence: 0.4,
